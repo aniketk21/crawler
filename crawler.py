@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from hashlib import sha256
 
 from es import insert_url, insert_data, create_index, search_url
+from pdf_extract import pdf_caller
 
 SEED = "http://www.coep.org.in/"
 
@@ -60,6 +61,7 @@ def special_url(url):
 
 def get_title(doc):
     try:
+        return remove_special_chars(doc.find_all('title')[0].text)
         return remove_special_chars(doc.find_all('h1')[0].text)
     except:
         pass
@@ -116,10 +118,10 @@ def remove_duplicate_links(links, prev_links):
     res_l = []
     for link in links:
         #if (link in glob_links) or (link in prev_links):
-        if (link in prev_links):
+        if link in prev_links:
             continue
-        elif link.endswith(".pdf"):
-            continue
+        #elif link.endswith(".pdf"):
+        #    continue
         else:
             res_l.append(link)
     return res_l
@@ -148,8 +150,8 @@ def crawl(seed):
     for idx, link in enumerate(links):
         if "download/file/fid" in link: # these always give 404
             continue
-        elif link[-4:] == ".pdf": # PDF file
-            continue
+        #elif link[-4:] == ".pdf": # PDF file
+        #    continue
         elif "facebook" in link:
             continue
         elif "/node" in link:
@@ -157,11 +159,16 @@ def crawl(seed):
         elif "www.sedo.com" in link:
             continue
         print("_______________")
-        print(str(float(idx) / len(links) * 100) + "% done", idx, len(links), link)
+        print("%.2f" % (float(idx) / len(links) * 100) + "% done", idx, len(links), link)
         #glob_links.add(link)
         try:
             resp = req_sess.get(link+'/', timeout=3)
-            if resp.text[:4] == "%PDF": # resp is a PDF file
+            if (resp.text[:4] == "%PDF") or (link[-4:] == ".pdf"): # resp is a PDF file
+                body = remove_special_chars(pdf_caller(link, req_sess))
+                title = link.split('/')[-1]
+                stat = insert_data(link, title, body)
+                if not stat:
+                    print("Data insertion failed", link)
                 continue
             if resp.status_code != 200:
                 print("***", link, resp.status_code)
@@ -216,5 +223,9 @@ def crawl(seed):
         if not stat:
             print("Data insertion failed", link)
 
-create_index()
-crawl(SEED)
+def main():
+    create_index()
+    crawl(SEED)
+
+if __name__ == "__main__":
+    main()
