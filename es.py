@@ -16,19 +16,22 @@ def insert_url(url, checksum):
 def insert_data(link, title, body):
     #print("insert"
     base = "http://localhost:9200/web_dump/dump"
-    link = '"link": "' + link + '",'
-    title = '"title": "' + title + '",'
-    body = '"body": "' + body + '"'
-    #print(link, type(link)
-    #print(title, type(title)
-    #print(body, type(body)
-    payload = '{' + link + title + body + '}'
-    #print(payload
-    headers = {'content-type': 'application/json'}
-    r = requests.post(url=base, data=payload, headers=headers)
-    if r.status_code == 201: # 201 Created
+    try:
+        link = '"link": "' + link.decode('utf-8') + '",'
+        title = '"title": "' + title.decode('utf-8') + '",'
+        body = '"body": "' + body.decode('utf-8') + '"'
+        #print(link, type(link)
+        #print(title, type(title)
+        #print(body, type(body)
+        payload = '{' + link + title + body + '}'
+        #print(payload
+        headers = {'content-type': 'application/json'}
+        r = requests.post(url=base, data=payload, headers=headers)
+        if r.status_code == 201: # 201 Created
         return True
-    print(r, r.text)
+        print(r, r.text)
+    except:
+        pass
     return False
 
 def create_index():

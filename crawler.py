@@ -7,6 +7,7 @@ from es import insert_url, insert_data, create_index, search_url
 from pdf_extract import pdf_caller
 
 SEED = "http://www.coep.org.in/"
+TIMEOUT = 15
 
 def remove_special_chars(text):
     res = ""
@@ -46,7 +47,7 @@ def extract_links(doc, seed="http://www.coep.org.in"):
             try:
                 if links[i][0] == '/' and links[i] != '/' and links[i] != '#': # link is relative
                     nlinks.append(seed + links[i]) # convert relative to absolute
-                elif 'coep' in links[i]: # ignore absolute links not containing the term 'coep' in them
+                elif "coep.org" in links[i]: # ignore absolute links not containing the "coep.org" in them
                     nlinks.append(links[i])
             except:
                 print("Failed in extract_links for", links[i])
@@ -54,30 +55,38 @@ def extract_links(doc, seed="http://www.coep.org.in"):
 
     return nlinks
 
+starts = ["mailto", "http://www.coep.org.in/calendar", "http://www.coep.org.in/node", "http://www.coep.org.in/user", "http://www.coep.org.in/ham/", "http://nextcloud", "http://www.outlook.com", "https://www.outlook.com", "http://kpoint", "http://portal", "https://login", "http://moodle", "http://foss"]
+ends = [".png", ".doc", ".xyz", "#main-content", "javascript:void(0)"]
+misc = ["download/file/fid", "facebook", "twitter", "/node", "www.sedo.com"]
+
 def special_url(url):
-    if url.startswith("mailto") or url.startswith("http://www.coep.org.in/calendar") or url.startswith("http://www.coep.org.in/node") or url.startswith("http://www.coep.org.in/user/") or url.startswith("http://www.coep.org.in/ham/") or url.endswith(".png") or url.endswith(".doc") or url.startswith("http://nextcloud") or url.startswith("https://www.outlook.com") or url.startswith("http://www.outlook.com") or url.startswith("http://kpoint") or url.startswith("http://portal") or url.startswith("https://login") or url.startswith("http://moodle") or url.startswith("http://foss") or url.endswith(".xyz") or url.endswith("#main-content") or url.endswith("javascript:void(0)"):
-        return True
+    # check whether url starts with any element in `starts`
+    for spc_url in starts:
+        if url.startswith(spc_url):
+            return True
+    
+    # check whether url ends with any element in `ends`
+    for spc_url in ends:
+        if url.endswith(spc_url):
+            return True
+
+    # check misc
+    for term in misc:
+        if term in url:
+            return True
+    
     return False
 
 def get_title(doc):
+    # extract the document's title
     try:
-        return remove_special_chars(doc.find_all('title')[0].text)
-        return remove_special_chars(doc.find_all('h1')[0].text)
+        title = remove_special_chars(doc.find_all('title')[0].text)
+        ntitle = title[:-28] # to remove "College of Engineering, Pune" as it occurs in all titles
+        if len(ntitle) < 3:
+            return title
+        return ntitle
     except:
-        pass
-    try:
-        return remove_special_chars(doc.find_all('h2')[0].text)
-    except:
-        pass
-    try:
-        return remove_special_chars(doc.find_all('h3')[0].text)
-    except:
-        pass
-    try:
-        return remove_special_chars(doc.find_all('h4')[0].text)
-    except:
-        pass
-    return "DEFAULT_TITLE"
+        return "DEFAULT_TITLE"
 
 def get_content(doc):
     '''
@@ -86,146 +95,179 @@ def get_content(doc):
     # find title
     title = get_title(doc) 
 
-    span_text_list = doc.find_all('span') # find all span tags
+    # find all span tags
+    span_text_list = doc.find_all('span')
     span_text = set() # insert into a set as sometimes span elements repeat
     for el in span_text_list:
         if len(el.text):
             span_text.add(el.text)
-    #span_text = ". ".join(span_text)
-    #span_text = remove_special_chars(span_text)#.encode('utf8')
     
-    p_text_list = doc.find_all('p') # find all span tags
-    #p_text = [el.text for el in p_text_list] # get text between span tags
+    # find all p tags
+    p_text_list = doc.find_all('p')
     for el in p_text_list:
         if len(el.text):
             span_text.add(el.text)
-    #p_text = " ".join(p_text) # string of all span texts
-    #p_text = remove_special_chars(p_text)#.encode('utf8') # convert unicode to string
-    final = remove_special_chars(" ".join(span_text))
-    return title, final
-
-    if len(span_text) > len(p_text):
-        return title, span_text + ' ' + p_text
-    return title, p_text + ' ' + span_text
+    
+    final_text = remove_special_chars(" ".join(span_text))
+    
+    return title, final_text
 
 def sha256_checksum(text):
     # find sha256 hash of a string
-    # convert text to bytes
+    # convert text to bytes as `sha256` requires `bytes` input
     text = bytes(text.encode())
     return sha256(text).hexdigest()
-#glob_links = set()
-def remove_duplicate_links(links, prev_links):
-    res_l = []
+
+def remove_already_seen_links(links, prev_links):
+    res = []
+    
     for link in links:
-        #if (link in glob_links) or (link in prev_links):
+        # if `link` has been seen previously
         if link in prev_links:
             continue
-        #elif link.endswith(".pdf"):
-        #    continue
         else:
-            res_l.append(link)
-    return res_l
+            res.append(link)
 
+    return res
+
+# main crawl code
 def crawl(seed):
-    print("Crawl", seed)
-    req_sess = requests.Session() # create a session for faster GET
+    print("Crawling", seed)
     
+    # create a requests session for faster GET
+    req_sess = requests.Session()
+    resp = None 
     try:
-        resp = req_sess.get(seed, timeout=3)
-        print(resp)
-    except requests.exceptions.ConnectionError as e:
-        print(seed)
-
-    if resp.status_code != 200: # 200 OK
-        print("***", seed, resp.status_code)
+        resp = req_sess.get(seed, timeout=TIMEOUT)
+        print(seed, resp)
+        if resp.status_code != 200: # 200 OK
+            print("***", seed, resp.status_code)
+            exit()
+    except:
+        if resp:
+            print(seed, resp, resp.text)
+        else:
+            print(seed, resp)
         exit()
-    
+
     doc = BeautifulSoup(resp.text, 'html.parser')
+    
+    # list of all links
     links = [seed]
+
     # get all links in doc
     links += extract_links(doc)
-    #for link in links:
-    #    glob_links.add(link)
     
+    crawled_cntr = 1
+
     for idx, link in enumerate(links):
-        if "download/file/fid" in link: # these always give 404
+        if idx == 0:
             continue
-        #elif link[-4:] == ".pdf": # PDF file
-        #    continue
-        elif "facebook" in link:
-            continue
-        elif "/node" in link:
-            continue
-        elif "www.sedo.com" in link:
-            continue
-        print("_______________")
-        print("%.2f" % (float(idx) / len(links) * 100) + "% done", idx, len(links), link)
-        #glob_links.add(link)
+
+        PDF_FLAG = False
+        
+        print("--------------------")
+        print("%.2f"%(float(idx)/len(links)*100)+"% done | ("+str(idx)+"/"+str(len(links))+") | "+link)
+        
         try:
-            resp = req_sess.get(link+'/', timeout=3)
-            if (resp.text[:4] == "%PDF") or (link[-4:] == ".pdf"): # resp is a PDF file
-                body = remove_special_chars(pdf_caller(link, req_sess))
-                title = link.split('/')[-1]
-                stat = insert_data(link, title, body)
-                if not stat:
-                    print("Data insertion failed", link)
-                continue
+            resp = req_sess.get(link, timeout=TIMEOUT)
+ 
             if resp.status_code != 200:
                 print("***", link, resp.status_code)
                 continue
+        
         except requests.exceptions.ConnectionError as e:
             print(link, "timed out")
             continue
+        
         except requests.exceptions.ReadTimeout:
             print(link, "read timed out")
             continue
+        
         except:
             continue
+        
+        # check if resp is a PDF file
+        if (resp.text[:4] == "%PDF") or (link[-4:] == ".pdf"):
+            PDF_FLAG = True
 
-        doc = BeautifulSoup(resp.text, 'html.parser')
+            pdftext = pdf_caller(link, req_sess)
+            if (pdftext is None) or (len(pdftext) < 5):
+                continue
+
+            body = remove_special_chars(pdftext)
+
+            title = link.split('/')[-1].replace("%20", ' ').replace(".pdf", '')
+                
+            #stat = insert_data(link, title, body)
+            #if not stat:
+            #    print("Data insertion failed", link)
+            # 
+            #continue
         
-        title, body = get_content(doc)
+        if not PDF_FLAG:
+            doc = BeautifulSoup(resp.text, 'html.parser')
         
+            title, body = get_content(doc)
+            
+            # extract new links on link page
+            new_links = extract_links(doc)
+
+            if new_links:
+                new_links = remove_already_seen_links(new_links, links)
+                if new_links:
+                    links += new_links # append new links to links
+
         # find sha256 checksum of title and body
         chksum = sha256_checksum(title+body)
-        
-        new_links = extract_links(doc) # extract new links on link page
-        
-        if new_links:
-            new_links = remove_duplicate_links(new_links, links)
-            if new_links:
-                links += new_links # append new links to links
+
+        # search whether link is already present in ES
         present, res = search_url(link)
         
         if present: # url is present in the `duplicate_urls` index
-            # check the checksum
+            # check the previous and current checksum
+            print("url exists")
             try:
                 if res["hits"]["total"] == 1:
+                    # find previously stored checksum
                     prev_chksum = res["hits"]["hits"][0]["_source"]["checksum"]
+                    
                     if prev_chksum == chksum:
                         continue
+                    
                     else:
                         _id = res["hits"]["hits"][0]["_id"]
                         stat = delete_page(_id)
+                
                 else:
                     print("Multiple records found", link)
                     print("res", res)
-                    exit()
+                    continue
+
             except TypeError:
                 continue
+        
         else:
             # insert url and document
             stat = insert_url(link, chksum)
             if not stat:
                 print("Link insertion failed", link)
                 continue
-        stat = insert_data(link, title, body)
+        
+        stat = insert_data(link.encode('utf-8'), title.encode('utf-8'), body.encode('utf-8'))
         if not stat:
             print("Data insertion failed", link)
+            continue
+
+        crawled_cntr += 1
+    return crawled_cntr
 
 def main():
     create_index()
-    crawl(SEED)
+    total_crawled = crawl(SEED)
+    print("____________________")
+    print("* Successfully crawled %d URLs *" % total_crawled)
+    print("____________________")
 
 if __name__ == "__main__":
     main()
