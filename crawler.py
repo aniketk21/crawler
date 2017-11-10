@@ -56,7 +56,7 @@ def extract_links(doc, seed="http://www.coep.org.in"):
     return nlinks
 
 starts = ["mailto", "http://www.coep.org.in/calendar", "http://www.coep.org.in/node", "http://www.coep.org.in/user", "http://www.coep.org.in/ham/", "http://nextcloud", "http://www.outlook.com", "https://www.outlook.com", "http://kpoint", "http://portal", "https://login", "http://moodle", "http://foss"]
-ends = [".png", ".doc", ".xyz", "#main-content", "javascript:void(0)"]
+ends = [".png", ".jpg", ".jpeg", ".doc", ".xyz", "#main-content", "javascript:void(0)"]
 misc = ["download/file/fid", "facebook", "twitter", "/node", "www.sedo.com"]
 
 def special_url(url):
