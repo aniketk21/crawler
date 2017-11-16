@@ -56,7 +56,7 @@ def extract_links(doc, seed="http://www.coep.org.in"):
     return nlinks
 
 starts = ["mailto", "http://www.coep.org.in/calendar", "http://www.coep.org.in/node", "http://www.coep.org.in/user", "http://www.coep.org.in/ham/", "http://nextcloud", "http://www.outlook.com", "https://www.outlook.com", "http://kpoint", "http://portal", "https://login", "http://moodle", "http://foss"]
-ends = [".png", ".jpg", ".jpeg", ".doc", ".xyz", ".zip", ".war", ".gz", ".tar.gz", "#main-content", "javascript:void(0)"]
+ends = [".png", ".jpg", ".jpeg", ".doc", ".rar", ".xyz", ".zip", ".war", ".gz", ".tar.gz", "#main-content", "javascript:void(0)"]
 misc = ["download/file/fid", "facebook", "twitter", "/node", "www.sedo.com"]
 
 def special_url(url):
@@ -192,6 +192,7 @@ def crawl(seed):
             PDF_FLAG = True
 
             pdftext = pdf_caller(link, req_sess)
+            
             if (pdftext is None) or (len(pdftext) < 5):
                 continue
 
@@ -199,12 +200,6 @@ def crawl(seed):
 
             title = link.split('/')[-1].replace("%20", ' ').replace(".pdf", '')
                 
-            #stat = insert_data(link, title, body)
-            #if not stat:
-            #    print("Data insertion failed", link)
-            # 
-            #continue
-        
         if not PDF_FLAG:
             doc = BeautifulSoup(resp.text, 'html.parser')
         
@@ -226,7 +221,7 @@ def crawl(seed):
         
         if present: # url is present in the `duplicate_urls` index
             # check the previous and current checksum
-            print("url exists")
+            print("URL exists in index.")
             try:
                 if res["hits"]["total"] == 1:
                     # find previously stored checksum

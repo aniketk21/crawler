@@ -18,6 +18,7 @@ def download_file(url, req_sess):
                     f.write(chunk)
     
         return local_filename
+    
     except:
         if r:
             print(url, r, r.text)
@@ -29,23 +30,28 @@ def extract_text_from_pdf(fname, pages=None):
     else:
         pagenums = set(pages)
 
-    output = StringIO()
-    manager = PDFResourceManager()
-    converter = TextConverter(manager, output, laparams=LAParams())
-    interpreter = PDFPageInterpreter(manager, converter)
+    try:
+        output = StringIO()
+        manager = PDFResourceManager()
+        converter = TextConverter(manager, output, laparams=LAParams())
+        interpreter = PDFPageInterpreter(manager, converter)
 
-    infile = open(fname, 'rb')
+        infile = open(fname, 'rb')
     
-    for page in PDFPage.get_pages(infile, pagenums):
-        interpreter.process_page(page)
+        for page in PDFPage.get_pages(infile, pagenums):
+            interpreter.process_page(page)
     
-    infile.close()
-    converter.close()
-    text = output.getvalue()
-    output.close
-    os.remove(fname)
+        infile.close()
+        converter.close()
+        text = output.getvalue()
+        output.close
+        os.remove(fname)
     
-    return text
+        return text
+    
+    except Exception as e:
+        print(fname, e)
+        return None
 
 def pdf_caller(url, req_sess):
     fname = download_file(url, req_sess)
